@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fitmentor">
+<meta name="theme-color" content="#0E0F12">
+<title>Fitmentor</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' fill='%230E0F12'/%3E%3Cg fill='%23D97757'%3E%3Crect x='160' y='236' width='192' height='40' rx='20'/%3E%3Crect x='96' y='186' width='56' height='140' rx='18'/%3E%3Crect x='360' y='186' width='56' height='140' rx='18'/%3E%3C/g%3E%3C/svg%3E">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: { colors: {
+  bg:"#0E0F12", surface:"#16181D", surface2:"#1E2128", line:"#282C34",
+  txt:"#F2EFEA", muted:"#8A9099", ok:"#5BBF8A", warn:"#E8B44A",
+  brand:{DEFAULT:"#D97757",400:"#E5937A",500:"#D97757",600:"#C25E3F"} } } } };
+</script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  html,body{background:#0E0F12;-webkit-tap-highlight-color:transparent}
+  body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:#F2EFEA;
+       overscroll-behavior-y:none;margin:0}
+  input,textarea{background:#1E2128;border:1px solid #282C34;border-radius:.75rem;
+       padding:.6rem .75rem;color:#F2EFEA;font-size:16px;outline:none}
+  input:focus,textarea:focus{border-color:#D97757}
+  input::placeholder,textarea::placeholder{color:#8A9099}
+  .safe-b{padding-bottom:max(.5rem,env(safe-area-inset-bottom))}
+  ::-webkit-scrollbar{width:0;height:0}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const {useState,useMemo,useEffect,useRef} = React;
+
+/* ---------------- datos ---------------- */
+const EX = [
+  {id:"e1",n:"Sentadilla con barra",g:"Pierna",r:1.4,s:"Patrón de empuje de tren inferior. Base de fuerza global.",
+   p:["Barra sobre trapecio, pies al ancho de hombros.","Baja controlando cadera y rodillas.","Rompe paralela con espalda neutra.","Empuja con el medio del pie."],
+   t:"No dejes que las rodillas colapsen hacia dentro.",c:["rodilla","espalda_baja","cadera"]},
+  {id:"e2",n:"Press banca",g:"Pecho",r:1.0,s:"Empuje horizontal. Principal para pectoral y tríceps.",
+   p:["Escápulas retraídas y pies firmes.","Baja la barra al esternón.","Codos a 45° del torso.","Empuja sin despegar la cadera."],
+   t:"Muñeca alineada con el antebrazo.",c:["hombro","muneca_codo"]},
+  {id:"e3",n:"Peso muerto",g:"Espalda",r:1.7,s:"Bisagra de cadera. Máxima carga sistémica.",
+   p:["Barra sobre medio pie.","Cadera atrás, espalda neutra.","Empuja el suelo y extiende cadera.","Baja controlado."],
+   t:"Si la espalda se redondea, baja el peso.",c:["espalda_baja","cadera"]},
+  {id:"e4",n:"Dominadas",g:"Espalda",r:0.9,s:"Tracción vertical para dorsal.",
+   p:["Agarre prono ancho.","Inicia deprimiendo escápulas.","Sube hasta pasar la barbilla.","Baja con control."],
+   t:"Evita el balanceo.",c:["hombro","muneca_codo"]},
+  {id:"e5",n:"Press militar",g:"Hombro",r:0.7,s:"Empuje vertical, deltoides anterior.",
+   p:["Barra a la altura de clavículas.","Glúteo y core apretados.","Empuja y mete la cabeza al final.","Baja controlado."],
+   t:"Sin arquear la lumbar.",c:["hombro","espalda_baja"]},
+  {id:"e6",n:"Remo con barra",g:"Espalda",r:1.0,s:"Tracción horizontal para espesor dorsal.",
+   p:["Torso a 45°.","Barra hacia el ombligo.","Aprieta escápulas arriba.","Baja sin soltar tensión."],
+   t:"Sin impulso de cadera.",c:["espalda_baja"]},
+  {id:"e7",n:"Prensa de piernas",g:"Pierna",r:2.2,s:"Alternativa a sentadilla con menor carga axial.",
+   p:["Pies al ancho de hombros.","Baja hasta 90°.","Empuja sin bloquear rodilla.","Espalda pegada al respaldo."],
+   t:"Buena opción si tienes molestia lumbar.",c:["rodilla"]},
+  {id:"e8",n:"Curl de bíceps",g:"Brazo",r:0.35,s:"Aislamiento de bíceps braquial.",
+   p:["Codos pegados al torso.","Sube contrayendo.","Pausa arriba.","Baja en 2 segundos."],
+   t:"Sin balanceo de hombro.",c:["muneca_codo"]},
+  {id:"e9",n:"Extensión de tríceps",g:"Brazo",r:0.4,s:"Aislamiento de tríceps en polea.",
+   p:["Codos fijos.","Extiende completo.","Pausa breve.","Regresa con control."],
+   t:"Solo se mueve el antebrazo.",c:["muneca_codo"]},
+  {id:"e10",n:"Plancha abdominal",g:"Core",r:0,s:"Anti-extensión isométrica.",
+   p:["Antebrazos bajo hombros.","Glúteo apretado.","Cadera neutra.","Respira sin perder tensión."],
+   t:"Mejor 30s perfectos que 90s colapsado.",c:["hombro"]},
+];
+const byId = id => EX.find(e=>e.id===id);
+
+const ROUTINE = {name:"Fuerza + Hipertrofia · 4 días", days:4, items:[
+  {id:"a",ex:"e1",d:1,sets:4,reps:"6-8",rest:150},{id:"b",ex:"e2",d:1,sets:4,reps:"8-10",rest:120,cw:60},
+  {id:"c",ex:"e6",d:1,sets:3,reps:"10-12",rest:90},{id:"d",ex:"e8",d:1,sets:3,reps:"12",rest:60},
+  {id:"e",ex:"e10",d:1,sets:3,reps:"45s",rest:45},
+  {id:"f",ex:"e3",d:2,sets:4,reps:"5",rest:180},{id:"g",ex:"e4",d:2,sets:4,reps:"AMRAP",rest:120},
+  {id:"h",ex:"e5",d:2,sets:3,reps:"8-10",rest:120},{id:"i",ex:"e9",d:2,sets:3,reps:"12",rest:60},
+  {id:"j",ex:"e7",d:3,sets:4,reps:"10-12",rest:120},{id:"k",ex:"e2",d:3,sets:3,reps:"10",rest:90},
+  {id:"l",ex:"e6",d:3,sets:3,reps:"10",rest:90},
+  {id:"m",ex:"e1",d:4,sets:3,reps:"8",rest:120},{id:"n",ex:"e4",d:4,sets:3,reps:"AMRAP",rest:90},
+  {id:"o",ex:"e10",d:4,sets:3,reps:"60s",rest:45},
+]};
+
+const MILESTONES=[{d:50,r:"Creatina"},{d:100,r:"Proteína"},{d:150,r:"Playera GymShark"},{d:200,r:"Sudadera YoungLA"}];
+const LEVELC={principiante:.55,intermedio:.75,avanzado:.95};
+const GOALI={fuerza:.85,musculo:.72,grasa:.65,condicion:.6};
+const FEELF={pleno:1,fatiga:.8,enfermo:.5};
+const GOALL={musculo:"Ganar músculo",fuerza:"Ganar fuerza",grasa:"Bajar grasa corporal",condicion:"Mejorar condición física"};
+
+const r25 = n => Math.max(2.5, Math.round(n/2.5)*2.5);
+const load = (p,ex,feel,cw) => {
+  const f = FEELF[feel];
+  if(ex.r===0) return {kg:0,pct:Math.round((1-f)*100)};
+  if(cw) return {kg:r25(cw*f),pct:Math.round((1-f)*100)};
+  const rm=(p.weight||75)*ex.r*LEVELC[p.level||"principiante"];
+  return {kg:r25(rm*GOALI[p.goal||"musculo"]*f),pct:Math.round((1-f)*100)};
+};
+const est1RM=(kg,reps)=>Math.round(kg*(1+reps/30));
+const key=d=>d.toISOString().slice(0,10);
+
+function makeAttendance(){
+  const out=[];const d=new Date();
+  for(let i=0;i<53;i++){out.push(key(d));d.setDate(d.getDate()-1);}
+  for(let i=0;i<160;i++){d.setDate(d.getDate()-1);if(Math.random()>.45)out.push(key(d));}
+  return out;
+}
+function streakOf(dates){
+  const s=new Set(dates);let n=0;const c=new Date();
+  if(!s.has(key(c)))c.setDate(c.getDate()-1);
+  while(s.has(key(c))){n++;c.setDate(c.getDate()-1);}
+  return n;
+}
+function grid(dates){
+  const s=new Set(dates),end=new Date(),st=new Date(end);
+  st.setDate(st.getDate()-364);st.setDate(st.getDate()-st.getDay());
+  const w=[],c=new Date(st);
+  while(c<=end){const wk=[];for(let i=0;i<7;i++){wk.push({k:key(c),a:s.has(key(c))});c.setDate(c.getDate()+1);}w.push(wk);}
+  return w;
+}
+
+/* ---------------- UI base ---------------- */
+const Card=({children,className=""})=>
+  <div className={"bg-surface border border-line rounded-2xl p-4 "+className}>{children}</div>;
+
+const Btn=({children,onClick,v="primary",className="",disabled})=>{
+  const s={primary:"bg-brand-500 text-bg",ghost:"bg-surface2 text-txt border border-line",
+    ok:"bg-ok text-bg",danger:"bg-transparent text-red-400 border border-red-400/40"}[v];
+  return <button onClick={onClick} disabled={disabled}
+    className={`rounded-xl px-4 py-2.5 font-semibold text-sm disabled:opacity-40 ${s} ${className}`}>{children}</button>;
+};
+
+const Chip=({children,active,onClick})=>
+  <button onClick={onClick} className={"px-3.5 py-2 rounded-full text-sm border shrink-0 "+
+    (active?"bg-brand-500 text-bg border-brand-500 font-semibold":"bg-surface2 text-muted border-line")}>{children}</button>;
+
+const Stat=({l,v,u})=><div><p className="text-muted text-[11px] mb-0.5">{l}</p>
+  <p className="text-2xl font-bold leading-none">{v}<span className="text-sm text-muted ml-1">{u}</span></p></div>;
+
+function Sheet({open,onClose,title,children}){
+  useEffect(()=>{document.body.style.overflow=open?"hidden":"";return()=>{document.body.style.overflow="";};},[open]);
+  if(!open)return null;
+  return <div className="fixed inset-0 z-50 flex items-end">
+    <div className="absolute inset-0 bg-black/70" onClick={onClose}/>
+    <div className="relative w-full max-w-md mx-auto bg-surface border-t border-line rounded-t-3xl max-h-[88vh] overflow-y-auto safe-b">
+      <div className="sticky top-0 bg-surface flex items-center justify-between px-5 py-4 border-b border-line">
+        <h2 className="text-xl font-bold">{title}</h2>
+        <button onClick={onClose} className="text-muted text-2xl leading-none px-2">×</button>
+      </div>
+      <div className="px-5 py-5">{children}</div>
+    </div></div>;
+}
+
+const Ico=({d,size=20,fill="none"})=>
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor"
+    strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d={d}/></svg>;
+const P={home:"M3 10.5 12 3l9 7.5V21H3z",dumb:"M6 6v12M18 6v12M3 9v6M21 9v6M6 12h12",
+  cal:"M3 8h18M7 3v3M17 3v3M3 6h18v15H3z",users:"M16 21v-2a4 4 0 0 0-8 0v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8",
+  user:"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8",
+  flame:"M12 22c4-1 6-4 6-7 0-4-4-5-4-9-3 2-4 4-4 6-1-1-1-2-1-3-2 2-3 4-3 6 0 3 2 6 6 7z",
+  info:"M12 16v-4M12 8h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18",check:"M20 6 9 17l-5-5",
+  chev:"m9 18 6-6-6-6",back:"m15 18-6-6 6-6",copy:"M8 8h12v12H8zM4 16V4h12",
+  send:"m22 2-7 20-4-9-9-4z",heart:"M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1L12 21l8.8-8.3a5 5 0 0 0 0-7.1z",
+  award:"M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM8.2 13.9 7 22l5-3 5 3-1.2-8.1",
+  alert:"M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z",
+  cam:"M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8",
+  bag:"M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0",
+  link:"M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1",
+  apple:"M12 20c-4 0-6-4-6-8s2-6 4-6c1 0 2 1 2 1s1-1 2-1c2 0 4 2 4 6s-2 8-6 8zM12 6s0-3 3-3"};
+
+/* ---------------- app ---------------- */
+const TABS=[["inicio","Inicio",P.home],["rutina","Rutina",P.dumb],["clases","Clases",P.cal],
+            ["comunidad","Comunidad",P.users],["perfil","Perfil",P.user]];
+
+function App(){
+  const [screen,setScreen]=useState("inicio");
+  const [me,setMe]=useState({name:"Tú",role:"client",weight:78,height:176,
+    goal:"musculo",level:"intermedio",freq:4,injuries:["hombro"]});
+  const [feel,setFeel]=useState("pleno");
+  const [logs,setLogs]=useState({});
+  const attendance=useMemo(makeAttendance,[]);
+  const [pending,setPending]=useState([
+    {id:"c2",name:"Mariana R.",weight:62,goal:"grasa",level:"principiante",freq:3,injuries:["rodilla"]},
+    {id:"c3",name:"Diego L.",weight:84,goal:"fuerza",level:"avanzado",freq:5,injuries:["ninguna"]}]);
+  const [clients,setClients]=useState([
+    {id:"c1",name:"Tú",weight:78,goal:"musculo",level:"intermedio",injuries:["hombro"]},
+    {id:"c4",name:"Sofía M.",weight:58,goal:"condicion",level:"intermedio",injuries:["ninguna"]}]);
+  const [posts,setPosts]=useState([
+    {id:1,a:"Coach Andrés",b:"Recordatorio: esta semana subimos 2.5 kg en press banca solo si cerraron todas las series con RPE 7 o menos.",t:"hace 2 h",l:12},
+    {id:2,a:"Sofía M.",b:"Primera vez rompiendo paralela en sentadilla sin molestia de rodilla. La progresión lenta funciona.",t:"hace 5 h",l:24},
+    {id:3,a:"Diego L.",b:"¿Alguien más siente que el press militar mejora mucho tras trabajar movilidad torácica?",t:"ayer",l:8}]);
+  const [msgs,setMsgs]=useState([
+    {id:1,f:"coach",b:"Vi tu registro de ayer, cerraste todo en RPE 7. Subimos carga el jueves.",t:"09:12"},
+    {id:2,f:"client",b:"Perfecto. El hombro va mejor, ya no molesta en press.",t:"09:20"},
+    {id:3,f:"coach",b:"Buenísimo. Mantén el calentamiento con banda antes de empujar.",t:"09:22"}]);
+
+  const st={me,setMe,feel,setFeel,logs,setLogs,attendance,pending,setPending,
+            clients,setClients,posts,setPosts,msgs,setMsgs,setScreen};
+
+  const full=["onboarding","pending","coach"].includes(screen);
+  const Body={inicio:Inicio,rutina:Rutina,clases:Clases,comunidad:Comunidad,perfil:Perfil,
+              nutricion:Nutricion,coach:Coach,onboarding:Onboarding,pending:Waiting}[screen];
+
+  return <div className="max-w-md mx-auto min-h-screen">
+    <div className={"px-5 pt-6 "+(full?"pb-10":"pb-28")}><Body st={st}/></div>
+    {!full && <nav className="fixed bottom-0 inset-x-0 bg-surface/95 backdrop-blur border-t border-line safe-b">
+      <ul className="grid grid-cols-5 max-w-md mx-auto">
+        {TABS.map(([id,label,d])=>{
+          const a=screen===id||(id==="inicio"&&screen==="nutricion");
+          return <li key={id}><button onClick={()=>setScreen(id)}
+            className={"w-full flex flex-col items-center gap-1 pt-2.5 pb-1.5 text-[10px] "+(a?"text-brand-500":"text-muted")}>
+            <Ico d={d}/>{label}</button></li>;})}
+      </ul></nav>}
+  </div>;
+}
+
+const Head=({eyebrow,title,right})=>
+  <header className="flex items-start justify-between mb-6">
+    <div>{eyebrow&&<p className="text-muted text-xs mb-1">{eyebrow}</p>}
+      <h1 className="text-[28px] leading-none font-bold">{title}</h1></div>{right}</header>;
+
+/* ---------------- Inicio ---------------- */
+function Inicio({st}){
+  const {me,feel,setFeel,attendance,setScreen}=st;
+  const s=streakOf(attendance);
+  const next=MILESTONES.find(m=>m.d>s);
+  const day=Math.min(((new Date().getDay()+6)%7)+1,ROUTINE.days);
+  const today=ROUTINE.items.filter(i=>i.d===day);
+  const F=[["pleno","Al 100%"],["fatiga","Con fatiga"],["enfermo","Enfermo"]];
+
+  return <div>
+    <Head eyebrow={new Date().toLocaleDateString("es",{weekday:"long",day:"numeric",month:"long"})}
+      title={"Hola, "+me.name.split(" ")[0]}
+      right={<Btn v="ghost" onClick={()=>setScreen("coach")}>Panel coach</Btn>}/>
+
+    <Card className="mb-4 border-brand-500/25">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-brand-500"><Ico d={P.flame} size={22}/></span>
+        <span className="text-4xl font-bold leading-none">{s}</span>
+        <span className="text-muted text-sm">días seguidos</span></div>
+      {next&&<>
+        <div className="h-1.5 bg-surface2 rounded-full overflow-hidden mb-2">
+          <div className="h-full bg-brand-500 rounded-full" style={{width:Math.min(100,s/next.d*100)+"%"}}/></div>
+        <p className="text-xs text-muted">{next.d-s} días para desbloquear <span className="text-txt font-semibold">{next.r}</span></p></>}
+    </Card>
+
+    <section className="mb-5">
+      <h2 className="text-sm text-muted mb-2.5">¿Cómo te sientes hoy?</h2>
+      <div className="flex gap-2">{F.map(([id,l])=><Chip key={id} active={feel===id} onClick={()=>setFeel(id)}>{l}</Chip>)}</div>
+      {feel!=="pleno"&&<p className="text-xs text-warn mt-2.5 leading-relaxed">
+        Modo adaptado activo: las cargas de hoy bajan {feel==="fatiga"?"20":"50"}%. Si estás enfermo,
+        considera descansar en lugar de entrenar.</p>}
+    </section>
+
+    <Card className="mb-4">
+      <div className="flex items-start justify-between mb-3">
+        <div><p className="text-muted text-xs mb-1">Sesión de hoy · Día {day}</p>
+          <h3 className="text-lg font-bold leading-tight">{ROUTINE.name}</h3></div>
+        <span className="text-brand-500"><Ico d={P.chev} size={22}/></span></div>
+      <ul className="space-y-2 mb-4">
+        {today.slice(0,4).map(i=><li key={i.id} className="flex justify-between text-sm">
+          <span>{byId(i.ex).n}</span><span className="text-muted">{i.sets}×{i.reps}</span></li>)}
+        {today.length>4&&<li className="text-xs text-muted">+{today.length-4} ejercicios más</li>}</ul>
+      <Btn className="w-full" onClick={()=>setScreen("rutina")}>Empezar entrenamiento</Btn></Card>
+
+    <div className="grid grid-cols-3 gap-3 mb-4">
+      <Card className="text-center py-3"><Stat l="Peso" v={me.weight} u="kg"/></Card>
+      <Card className="text-center py-3"><Stat l="Frecuencia" v={me.freq} u="d/sem"/></Card>
+      <Card className="text-center py-3"><Stat l="Nivel" v={me.level.slice(0,4)}/></Card></div>
+
+    <div className="grid grid-cols-2 gap-3">
+      <button onClick={()=>st.setScreen("nutricion")}><Card className="flex items-center gap-3 h-full">
+        <span className="text-brand-500"><Ico d={P.apple}/></span><span className="text-sm font-semibold">Nutrición</span></Card></button>
+      <button onClick={()=>st.setScreen("comunidad")}><Card className="flex items-center gap-3 h-full">
+        <span className="text-brand-500"><Ico d={P.users}/></span><span className="text-sm font-semibold">Chat coach</span></Card></button></div>
+
+    <button onClick={()=>st.setScreen("onboarding")} className="text-muted text-xs mt-6 underline">
+      Ver el onboarding de registro</button>
+  </div>;
+}
+
+/* ---------------- Rutina ---------------- */
+function Rutina({st}){
+  const {me,feel,logs,setLogs}=st;
+  const [day,setDay]=useState(1);
+  const [detail,setDetail]=useState(null);
+  const items=ROUTINE.items.filter(i=>i.d===day);
+  const total=items.reduce((n,i)=>n+i.sets,0);
+  const done=items.reduce((n,i)=>n+((logs[i.id]||[]).filter(x=>x.done).length),0);
+
+  const upd=(k,no,patch)=>setLogs(p=>{
+    const l=[...(p[k]||[])],i=l.findIndex(x=>x.no===no);
+    if(i>=0)l[i]={...l[i],...patch};else l.push({no,done:false,...patch});
+    return {...p,[k]:l};});
+
+  return <div>
+    <Head eyebrow={ROUTINE.name} title="Tu rutina"/>
+    <div className="flex gap-2 overflow-x-auto pb-1 mb-4">
+      {[1,2,3,4].map(d=><Chip key={d} active={day===d} onClick={()=>setDay(d)}>Día {d}</Chip>)}</div>
+
+    <Card className="mb-4 flex items-center justify-between">
+      <div><p className="text-muted text-xs">Progreso de la sesión</p>
+        <p className="text-2xl font-bold">{done}<span className="text-muted text-base">/{total} series</span></p></div>
+      <svg viewBox="0 0 36 36" className="w-16 h-16 -rotate-90">
+        <circle cx="18" cy="18" r="15.5" fill="none" stroke="#282C34" strokeWidth="4"/>
+        <circle cx="18" cy="18" r="15.5" fill="none" stroke="#D97757" strokeWidth="4" strokeLinecap="round"
+          strokeDasharray={(done/(total||1))*97.4+" 97.4"}/></svg></Card>
+
+    {feel!=="pleno"&&<div className="flex gap-2 items-start bg-warn/10 border border-warn/30 rounded-xl p-3 mb-4">
+      <span className="text-warn shrink-0 mt-0.5"><Ico d={P.alert} size={16}/></span>
+      <p className="text-xs text-warn leading-relaxed">Cargas reducidas por tu check-in de hoy. Prioriza técnica sobre peso.</p></div>}
+
+    <div className="space-y-4">{items.map(it=>{
+      const ex=byId(it.ex);
+      const risky=ex.c.some(c=>me.injuries.includes(c));
+      const {kg,pct}=load(me,ex,feel,it.cw);
+      const ls=logs[it.id]||[];
+      return <Card key={it.id}>
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex-1">
+            <p className="text-brand-500 text-[11px] font-semibold mb-0.5">{ex.g}</p>
+            <h3 className="font-bold leading-tight">{ex.n}</h3>
+            <p className="text-muted text-xs mt-1">{it.rest}s descanso
+              {it.cw&&<span className="text-brand-400"> · carga fijada por tu coach</span>}</p></div>
+          <button onClick={()=>setDetail(ex)} className="text-muted p-1"><Ico d={P.info} size={18}/></button></div>
+
+        {risky&&<p className="text-[11px] text-warn bg-warn/10 rounded-lg px-2.5 py-2 mb-3">
+          Toca una zona que marcaste con molestia. Baja el rango o pide sustitución a tu coach.</p>}
+
+        <div className="grid grid-cols-[26px_1fr_1fr_42px_36px] gap-2 text-[10px] text-muted mb-1.5 px-1">
+          <span>Set</span><span>Sugerido</span><span>Real kg</span><span>RPE</span><span/></div>
+
+        <div className="space-y-1.5">{Array.from({length:it.sets},(_,s)=>{
+          const no=s+1,lg=ls.find(x=>x.no===no)||{};
+          return <div key={no} className="grid grid-cols-[26px_1fr_1fr_42px_36px] gap-2 items-center">
+            <span className="text-muted text-sm text-center">{no}</span>
+            <div className="bg-surface2 rounded-lg px-2 py-2 text-sm">{kg>0?kg+" kg":"—"}
+              <span className="text-muted text-xs"> × {it.reps}</span></div>
+            <input type="number" inputMode="decimal" placeholder={kg||""} value={lg.actual??""}
+              onChange={e=>upd(it.id,no,{actual:e.target.value})} className="w-full text-sm py-2 px-2"/>
+            <input type="number" inputMode="numeric" placeholder="—" value={lg.rpe??""}
+              onChange={e=>upd(it.id,no,{rpe:e.target.value})} className="w-full text-sm py-2 px-1 text-center"/>
+            <button onClick={()=>upd(it.id,no,{done:!lg.done})}
+              className={"h-9 rounded-lg border flex items-center justify-center "+
+                (lg.done?"bg-ok border-ok text-bg":"border-line text-muted")}><Ico d={P.check} size={16}/></button>
+          </div>;})}</div>
+
+        {pct>0&&<p className="text-[11px] text-muted mt-2.5">Carga ajustada −{pct}% por tu estado de hoy.</p>}
+      </Card>;})}</div>
+
+    <Sheet open={!!detail} onClose={()=>setDetail(null)} title={detail?detail.n:""}>
+      {detail&&<Detail ex={detail} me={me} feel={feel}/>}</Sheet>
+  </div>;
+}
+
+function Detail({ex,me,feel}){
+  const {kg}=load(me,ex,feel);
+  return <div className="space-y-5">
+    <div className="aspect-video bg-surface2 rounded-xl grid place-items-center border border-line">
+      <p className="text-muted text-xs text-center px-6">Aquí va el GIF de ejecución del ejercicio.</p></div>
+    <section><h3 className="text-sm text-muted mb-1.5">Resumen</h3>
+      <p className="text-sm leading-relaxed">{ex.s}</p></section>
+    <section><h3 className="text-sm text-muted mb-2">Pasos</h3>
+      <ol className="space-y-2">{ex.p.map((s,i)=><li key={i} className="flex gap-3 text-sm">
+        <span className="text-brand-500 font-bold">{i+1}</span><span className="leading-relaxed">{s}</span></li>)}</ol></section>
+    <section><h3 className="text-sm text-muted mb-2">Métricas</h3>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-surface2 rounded-xl p-3"><p className="text-[10px] text-muted">Sugerido hoy</p>
+          <p className="text-xl font-bold">{kg||"—"}<span className="text-xs text-muted"> kg</span></p></div>
+        <div className="bg-surface2 rounded-xl p-3"><p className="text-[10px] text-muted">1RM est.</p>
+          <p className="text-xl font-bold">{kg?est1RM(kg,8):"—"}</p></div>
+        <div className="bg-surface2 rounded-xl p-3"><p className="text-[10px] text-muted">Grupo</p>
+          <p className="text-sm font-bold pt-1.5">{ex.g}</p></div></div></section>
+    <section><h3 className="text-sm text-muted mb-1.5">Notas</h3>
+      <p className="text-sm leading-relaxed text-brand-400">{ex.t}</p></section>
+  </div>;
+}
+
+/* ---------------- Clases ---------------- */
+const SLOTS=[
+  {id:1,d:"Jue 4 sep",h:"18:00",t:"Revisión de avances",m:"presencial",s:3},
+  {id:2,d:"Vie 5 sep",h:"07:30",t:"Técnica de levantamientos",m:"presencial",s:5},
+  {id:3,d:"Sáb 6 sep",h:"10:00",t:"Consulta de nutrición",m:"online",s:8},
+  {id:4,d:"Lun 8 sep",h:"19:00",t:"Evaluación mensual",m:"presencial",s:2}];
+
+function Clases(){
+  const [f,setF]=useState("todas");
+  const [booked,setBooked]=useState([]);
+  const [c,setC]=useState(null);
+  const list=SLOTS.filter(s=>f==="todas"||s.m===f);
+  return <div>
+    <Head eyebrow="Agenda con tu coach" title="Clases y citas"/>
+    <Card className="mb-5 border-brand-500/30">
+      <p className="text-brand-500 text-[11px] font-semibold mb-1">Tu próxima cita</p>
+      <h3 className="font-bold">Revisión de avances</h3>
+      <p className="text-muted text-sm mt-1">Jueves 4 sep · 18:00</p></Card>
+    <div className="flex gap-2 mb-4">{["todas","presencial","online"].map(x=>
+      <Chip key={x} active={f===x} onClick={()=>setF(x)}>{x[0].toUpperCase()+x.slice(1)}</Chip>)}</div>
+    <div className="space-y-3">{list.map(s=>{
+      const b=booked.includes(s.id);
+      return <Card key={s.id}><div className="flex items-start justify-between gap-3">
+        <div className="flex-1"><h3 className="font-bold leading-tight">{s.t}</h3>
+          <p className="text-muted text-sm mt-1.5">{s.d} · {s.h}</p>
+          <p className="text-muted text-xs mt-1">{s.m==="online"?"Videollamada":"En el gimnasio"} · {s.s} lugares</p></div>
+        {b?<span className="text-ok text-xs font-semibold">Reservada</span>
+          :<Btn v="ghost" onClick={()=>setC(s)}>Reservar</Btn>}</div></Card>;})}</div>
+    <Sheet open={!!c} onClose={()=>setC(null)} title="Confirmar reserva">
+      {c&&<div className="space-y-5">
+        <div><h3 className="font-bold text-lg">{c.t}</h3>
+          <p className="text-muted text-sm mt-1">{c.d} · {c.h}</p></div>
+        <p className="text-sm text-muted leading-relaxed">Tu coach recibirá la solicitud y verá tus métricas
+          más recientes antes de la sesión.</p>
+        <Btn className="w-full" onClick={()=>{setBooked(b=>[...b,c.id]);setC(null);}}>Reservar lugar</Btn></div>}</Sheet>
+  </div>;
+}
+
+/* ---------------- Comunidad ---------------- */
+function Comunidad({st}){
+  const [tab,setTab]=useState("foro");
+  return <div>
+    <Head eyebrow="Tu grupo de entrenamiento" title="Comunidad"/>
+    <div className="grid grid-cols-2 bg-surface2 rounded-xl p-1 mb-5">
+      {[["foro","Foro"],["chat","Chat con coach"]].map(([id,l])=>
+        <button key={id} onClick={()=>setTab(id)}
+          className={"py-2 rounded-lg text-sm font-semibold "+(tab===id?"bg-brand-500 text-bg":"text-muted")}>{l}</button>)}</div>
+    {tab==="foro"?<Foro st={st}/>:<Chat st={st}/>}
+  </div>;
+}
+
+function Foro({st}){
+  const {posts,setPosts,me}=st;
+  const [d,setD]=useState(""),[liked,setLiked]=useState([]);
+  return <div>
+    <Card className="mb-4">
+      <textarea value={d} onChange={e=>setD(e.target.value)} rows="3"
+        placeholder="Comparte un avance o haz una pregunta al grupo" className="w-full resize-none text-sm mb-3"/>
+      <Btn className="w-full" disabled={!d.trim()}
+        onClick={()=>{setPosts(p=>[{id:Date.now(),a:me.name,b:d.trim(),t:"ahora",l:0},...p]);setD("");}}>Publicar</Btn></Card>
+    <div className="space-y-3">{posts.map(p=>{
+      const on=liked.includes(p.id);
+      return <Card key={p.id}>
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <div className="w-8 h-8 rounded-full bg-brand-500/20 text-brand-500 grid place-items-center text-xs font-bold">{p.a[0]}</div>
+          <div><p className="text-sm font-semibold leading-none">{p.a}</p>
+            <p className="text-muted text-[11px] mt-1">{p.t}</p></div></div>
+        <p className="text-sm leading-relaxed mb-3">{p.b}</p>
+        <button onClick={()=>setLiked(l=>on?l.filter(x=>x!==p.id):[...l,p.id])}
+          className={"flex items-center gap-1.5 text-xs "+(on?"text-brand-500":"text-muted")}>
+          <Ico d={P.heart} size={14} fill={on?"currentColor":"none"}/>{p.l+(on?1:0)}</button></Card>;})}</div>
+  </div>;
+}
+
+function Chat({st}){
+  const {msgs,setMsgs}=st;
+  const [d,setD]=useState("");
+  const end=useRef(null);
+  useEffect(()=>{end.current&&end.current.scrollIntoView({behavior:"smooth"});},[msgs]);
+  const send=()=>{if(!d.trim())return;
+    setMsgs(m=>[...m,{id:Date.now(),f:"client",b:d.trim(),
+      t:new Date().toLocaleTimeString("es",{hour:"2-digit",minute:"2-digit"})}]);setD("");};
+  return <div>
+    <div className="space-y-2.5 mb-4 min-h-[45vh]">
+      {msgs.map(m=>{const own=m.f==="client";
+        return <div key={m.id} className={"flex "+(own?"justify-end":"justify-start")}>
+          <div className={"max-w-[80%] rounded-2xl px-3.5 py-2.5 "+
+            (own?"bg-brand-500 text-bg rounded-br-md":"bg-surface border border-line rounded-bl-md")}>
+            <p className="text-sm leading-relaxed">{m.b}</p>
+            <p className={"text-[10px] mt-1 "+(own?"text-bg/60":"text-muted")}>{m.t}</p></div></div>;})}
+      <div ref={end}/></div>
+    <div className="flex gap-2">
+      <input value={d} onChange={e=>setD(e.target.value)} placeholder="Escribe un mensaje"
+        onKeyDown={e=>e.key==="Enter"&&send()} className="flex-1"/>
+      <button onClick={send} disabled={!d.trim()} className="bg-brand-500 text-bg rounded-xl px-4 disabled:opacity-40">
+        <Ico d={P.send} size={18}/></button></div>
+  </div>;
+}
+
+/* ---------------- Perfil ---------------- */
+const METRICS=[["Abr",82,21],["May",81,20],["Jun",80,18.5],["Jul",79,17],["Ago",78.5,16],["Sep",78,15.2]];
+const SHOP=[["Plan personalizado 3 meses","$1,200 MXN","Coaching"],
+  ["Proteína whey 2 kg","$890 MXN","Suplemento"],["Creatina 300 g","$420 MXN","Suplemento"]];
+
+function Perfil({st}){
+  const {me,attendance}=st;
+  const s=streakOf(attendance);
+  const weeks=useMemo(()=>grid(attendance),[attendance]);
+  const [mk,setMk]=useState(1);
+  const vals=METRICS.map(m=>m[mk]);
+  const mn=Math.min(...vals),mx=Math.max(...vals),rg=mx-mn||1;
+
+  return <div>
+    <Head title="Perfil"/>
+    <Card className="mb-4">
+      <div className="flex items-center gap-4 mb-4">
+        <div className="w-14 h-14 rounded-full bg-brand-500/20 text-brand-500 grid place-items-center text-2xl font-bold">{me.name[0]}</div>
+        <div><h2 className="font-bold text-lg leading-none">{me.name}</h2>
+          <p className="text-muted text-sm mt-1.5">{GOALL[me.goal]} · {me.level}</p></div></div>
+      <div className="grid grid-cols-4 gap-2 pt-4 border-t border-line">
+        <Stat l="Peso" v={me.weight} u="kg"/><Stat l="Altura" v={me.height} u="cm"/>
+        <Stat l="Racha" v={s} u="d"/><Stat l="Sesiones" v={attendance.length}/></div></Card>
+
+    <h2 className="text-sm text-muted mb-3">Asistencia del último año</h2>
+    <Card className="mb-5">
+      <div className="flex gap-[3px] overflow-x-auto pb-1">
+        {weeks.map((w,i)=><div key={i} className="flex flex-col gap-[3px] shrink-0">
+          {w.map(d=><div key={d.k} className={"w-[9px] h-[9px] rounded-[2px] "+(d.a?"bg-brand-500":"bg-surface2")}/>)}
+        </div>)}</div>
+      <div className="flex items-center gap-2 mt-3 text-[10px] text-muted">
+        <span>Menos</span><span className="w-2.5 h-2.5 rounded-[2px] bg-surface2"/>
+        <span className="w-2.5 h-2.5 rounded-[2px] bg-brand-500/50"/>
+        <span className="w-2.5 h-2.5 rounded-[2px] bg-brand-500"/><span>Más</span></div></Card>
+
+    <h2 className="text-sm text-muted mb-3">Recompensas</h2>
+    <div className="space-y-2 mb-5">{MILESTONES.map(m=>{const has=m.d<=s;
+      return <Card key={m.d} className={"flex items-center gap-3 py-3 "+(has?"border-brand-500/40":"")}>
+        <span className={has?"text-brand-500":"text-muted"}><Ico d={P.award}/></span>
+        <div className="flex-1"><p className={"text-sm font-semibold "+(has?"":"text-muted")}>{m.r}</p>
+          <p className="text-[11px] text-muted">{m.d} días consecutivos</p></div>
+        {has?<span className="text-brand-500 text-xs font-semibold">Desbloqueado</span>
+          :<span className="text-muted text-xs">{m.d-s} días</span>}</Card>;})}</div>
+
+    <div className="flex items-center justify-between mb-3">
+      <h2 className="text-sm text-muted">Métricas</h2>
+      <div className="flex gap-2"><Chip active={mk===1} onClick={()=>setMk(1)}>Peso</Chip>
+        <Chip active={mk===2} onClick={()=>setMk(2)}>% Grasa</Chip></div></div>
+    <Card className="mb-5"><div className="flex items-end justify-between gap-2 h-32">
+      {METRICS.map((m,i)=><div key={m[0]} className="flex-1 flex flex-col items-center gap-1.5">
+        <span className="text-[10px] text-muted">{m[mk]}</span>
+        <div className="w-full bg-brand-500 rounded-t-md"
+          style={{height:(20+((m[mk]-mn)/rg)*75)+"%",opacity:.45+(i/METRICS.length)*.55}}/>
+        <span className="text-[10px] text-muted">{m[0]}</span></div>)}</div></Card>
+
+    <h2 className="text-sm text-muted mb-3">Fotos de progreso</h2>
+    <div className="grid grid-cols-2 gap-3 mb-5">{["Antes · Abril","Ahora · Sept"].map(l=>
+      <Card key={l} className="aspect-[3/4] grid place-items-center"><div className="text-center">
+        <span className="text-muted"><Ico d={P.cam} size={22}/></span>
+        <p className="text-[11px] text-muted mt-2">{l}</p></div></Card>)}</div>
+
+    <h2 className="text-sm text-muted mb-3">Tienda</h2>
+    <div className="space-y-2">{SHOP.map(([n,p,t])=>
+      <Card key={n} className="flex items-center gap-3 py-3">
+        <span className="text-brand-500"><Ico d={P.bag} size={18}/></span>
+        <div className="flex-1"><p className="text-sm font-semibold leading-tight">{n}</p>
+          <p className="text-[11px] text-muted mt-0.5">{t}</p></div>
+        <span className="text-sm font-semibold text-brand-500">{p}</span></Card>)}</div>
+  </div>;
+}
+
+/* ---------------- Nutrición ---------------- */
+const RECIPES={hipertrofia:[
+  ["Arroz con pollo y aguacate",720,48,"20 min","180 g pollo, 120 g arroz cocido, medio aguacate, aceite de oliva."],
+  ["Avena con proteína y plátano",560,40,"5 min","80 g avena, 1 scoop proteína, 1 plátano, leche, crema de cacahuate."],
+  ["Pasta con atún y huevo",680,45,"15 min","100 g pasta seca, 1 lata de atún, 2 huevos, tomate y aceite."]],
+definicion:[
+  ["Bowl de pollo y verduras",420,45,"15 min","180 g pollo, brócoli y pimiento, 60 g arroz, limón y especias."],
+  ["Omelette de claras y espinaca",280,32,"8 min","5 claras + 1 huevo, espinaca, champiñones, pan integral."],
+  ["Salmón con ensalada",450,38,"18 min","150 g salmón al horno, mezcla verde, medio aguacate, vinagreta."]]};
+const SUPPS=[["Creatina monohidratada","5 g diarios","El suplemento con más respaldo para fuerza. Sin ciclos ni carga."],
+  ["Proteína en polvo","1-2 scoops","Herramienta de conveniencia, no obligatoria si llegas con comida."],
+  ["Cafeína","3-6 mg/kg","30-45 min antes de entrenar. Evítala 8 h antes de dormir."],
+  ["Vitamina D3","1000-2000 UI","Útil si tienes poca exposición solar. Idealmente con análisis previo."]];
+
+function Nutricion({st}){
+  const {me}=st;
+  const [plan,setPlan]=useState(me.goal==="grasa"?"definicion":"hipertrofia");
+  const w=me.weight,kcal=Math.round(plan==="hipertrofia"?w*38:w*28);
+  const pr=Math.round(w*(plan==="hipertrofia"?2:2.2)),fat=Math.round(w*.9);
+  const cb=Math.round((kcal-pr*4-fat*9)/4);
+  return <div>
+    <Head eyebrow="Guía dinámica según tu objetivo" title="Nutrición"/>
+    <div className="flex gap-2 mb-5">
+      <Chip active={plan==="hipertrofia"} onClick={()=>setPlan("hipertrofia")}>Hipertrofia</Chip>
+      <Chip active={plan==="definicion"} onClick={()=>setPlan("definicion")}>Pérdida de grasa</Chip></div>
+    <Card className="mb-5">
+      <p className="text-muted text-xs mb-3">Objetivo diario estimado para {w} kg</p>
+      <div className="grid grid-cols-4 gap-2 mb-4">
+        <Stat l="Calorías" v={kcal}/><Stat l="Proteína" v={pr} u="g"/>
+        <Stat l="Carbos" v={cb} u="g"/><Stat l="Grasa" v={fat} u="g"/></div>
+      <div className="flex h-2 rounded-full overflow-hidden">
+        <div className="bg-brand-500" style={{width:(pr*4/kcal*100)+"%"}}/>
+        <div className="bg-brand-400" style={{width:(cb*4/kcal*100)+"%"}}/>
+        <div className="bg-warn" style={{width:(fat*9/kcal*100)+"%"}}/></div>
+      <p className="text-[11px] text-muted mt-3 leading-relaxed">
+        Estimación general. Ajusta con tu coach según cómo evolucione tu peso semana a semana.</p></Card>
+    <h2 className="text-sm text-muted mb-3">Recetas rápidas</h2>
+    <div className="space-y-3 mb-5">{RECIPES[plan].map(([n,k,p,t,h])=>
+      <Card key={n}><div className="flex justify-between items-start mb-2">
+        <h3 className="font-bold text-sm leading-tight flex-1">{n}</h3>
+        <span className="text-[11px] text-muted ml-3">{t}</span></div>
+        <p className="text-xs text-muted leading-relaxed mb-2.5">{h}</p>
+        <div className="flex gap-4 text-[11px]"><span className="text-brand-500 font-semibold">{k} kcal</span>
+          <span className="text-muted">{p} g proteína</span></div></Card>)}</div>
+    <h2 className="text-sm text-muted mb-3">Suplementación</h2>
+    <div className="space-y-2">{SUPPS.map(([n,d,x])=>
+      <Card key={n} className="py-3"><div className="flex justify-between items-baseline mb-1">
+        <h3 className="text-sm font-semibold">{n}</h3><span className="text-[11px] text-brand-500">{d}</span></div>
+        <p className="text-[11px] text-muted leading-relaxed">{x}</p></Card>)}</div>
+    <p className="text-[11px] text-muted mt-4 leading-relaxed">
+      Esta guía es orientativa. Si tienes una condición médica, tomas medicamentos o estás embarazada,
+      consulta a un profesional de la salud antes de cambiar tu alimentación o empezar suplementos.</p>
+  </div>;
+}
+
+/* ---------------- Coach ---------------- */
+function Coach({st}){
+  const {pending,setPending,clients,setClients,attendance,setScreen}=st;
+  const [tab,setTab]=useState("sol");
+  const [copied,setCopied]=useState(false);
+  const [detail,setDetail]=useState(null),[assign,setAssign]=useState(null);
+  const url=(typeof location!=="undefined"?location.origin+location.pathname:"")+"?coachId=AND7X2";
+
+  return <div>
+    <header className="flex items-center gap-3 mb-6">
+      <button onClick={()=>setScreen("inicio")} className="text-muted"><Ico d={P.back} size={22}/></button>
+      <div><p className="text-muted text-xs">Panel del entrenador</p>
+        <h1 className="text-[26px] font-bold leading-none">Tus clientes</h1></div></header>
+
+    <div className="grid grid-cols-3 gap-3 mb-5">
+      <Card className="py-3 text-center"><Stat l="Activos" v={clients.length}/></Card>
+      <Card className="py-3 text-center"><Stat l="Pendientes" v={pending.length}/></Card>
+      <Card className="py-3 text-center"><Stat l="Adherencia" v="82" u="%"/></Card></div>
+
+    <Card className="mb-5">
+      <div className="flex items-center gap-2 mb-2.5">
+        <span className="text-brand-500"><Ico d={P.link} size={16}/></span>
+        <h2 className="text-sm font-semibold">Tu enlace de invitación</h2></div>
+      <p className="text-[11px] text-muted mb-3 leading-relaxed">
+        Compártelo con un cliente nuevo. Al registrarse queda vinculado a ti y aparece en solicitudes.</p>
+      <div className="flex gap-2">
+        <code className="flex-1 bg-surface2 border border-line rounded-xl px-3 py-2.5 text-[11px] text-muted truncate">{url}</code>
+        <button onClick={()=>{navigator.clipboard&&navigator.clipboard.writeText(url);setCopied(true);setTimeout(()=>setCopied(false),2000);}}
+          className="bg-brand-500 text-bg rounded-xl px-3.5"><Ico d={copied?P.check:P.copy} size={16}/></button></div></Card>
+
+    <div className="grid grid-cols-2 bg-surface2 rounded-xl p-1 mb-5">
+      {[["sol","Solicitudes ("+pending.length+")"],["cli","Clientes activos"]].map(([id,l])=>
+        <button key={id} onClick={()=>setTab(id)}
+          className={"py-2 rounded-lg text-sm font-semibold "+(tab===id?"bg-brand-500 text-bg":"text-muted")}>{l}</button>)}</div>
+
+    {tab==="sol"&&<div className="space-y-3">
+      {pending.length===0&&<Card className="text-center py-8">
+        <p className="text-sm text-muted">No hay solicitudes pendientes.</p>
+        <p className="text-xs text-muted mt-1">Comparte tu enlace para recibir nuevos clientes.</p></Card>}
+      {pending.map(c=><Card key={c.id}>
+        <div className="flex items-start gap-3 mb-3.5">
+          <div className="w-10 h-10 rounded-full bg-brand-500/15 text-brand-500 grid place-items-center font-bold">{c.name[0]}</div>
+          <div className="flex-1"><h3 className="font-bold leading-tight">{c.name}</h3>
+            <p className="text-muted text-xs mt-1">{GOALL[c.goal]} · {c.level} · {c.freq} d/sem</p>
+            <p className="text-muted text-xs mt-0.5">{c.weight} kg · Lesiones: {c.injuries.join(", ")}</p></div></div>
+        <div className="flex gap-2">
+          <Btn v="ok" className="flex-1" onClick={()=>{setClients(x=>[...x,c]);setPending(p=>p.filter(y=>y.id!==c.id));}}>Aprobar</Btn>
+          <Btn v="danger" className="flex-1" onClick={()=>setPending(p=>p.filter(y=>y.id!==c.id))}>Rechazar</Btn></div></Card>)}</div>}
+
+    {tab==="cli"&&<div className="space-y-3">{clients.map(c=>
+      <Card key={c.id}><div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-surface2 grid place-items-center font-bold">{c.name[0]}</div>
+        <div className="flex-1 min-w-0"><h3 className="font-bold leading-tight truncate">{c.name}</h3>
+          <p className="text-muted text-xs mt-1">Racha {streakOf(attendance)} d · {GOALL[c.goal]}</p></div></div>
+        <div className="flex gap-2 mt-3.5">
+          <Btn v="ghost" className="flex-1" onClick={()=>setDetail(c)}>Ver actividad</Btn>
+          <Btn className="flex-1" onClick={()=>setAssign(c)}>Asignar rutina</Btn></div></Card>)}</div>}
+
+    <Sheet open={!!detail} onClose={()=>setDetail(null)} title={detail?detail.name:""}>
+      {detail&&<div className="space-y-5">
+        <div className="grid grid-cols-3 gap-3">
+          <Card className="py-3"><Stat l="Peso" v={detail.weight} u="kg"/></Card>
+          <Card className="py-3"><Stat l="Racha" v={streakOf(attendance)} u="d"/></Card>
+          <Card className="py-3"><Stat l="Sesiones" v={attendance.length}/></Card></div>
+        <section><h3 className="text-sm text-muted mb-2.5">Últimos registros de series</h3>
+          <div className="space-y-2">{[["Sentadilla con barra","4×6 · 90 kg",8,"Ayer"],
+            ["Press banca","4×8 · 60 kg",7,"Ayer"],["Peso muerto","4×5 · 120 kg",9,"Hace 2 días"]].map(([n,s,rpe,w])=>
+            <Card key={n} className="py-3 flex items-center justify-between">
+              <div><p className="text-sm font-semibold leading-tight">{n}</p>
+                <p className="text-[11px] text-muted mt-0.5">{s} · {w}</p></div>
+              <span className={"text-xs font-semibold "+(rpe>=9?"text-warn":"text-ok")}>RPE {rpe}</span></Card>)}</div></section>
+        <section><h3 className="text-sm text-muted mb-2.5">Historial de pesajes</h3>
+          <Card className="py-3"><div className="flex items-end gap-2 h-20">
+            {[82,81,80,79,78.5,78].map((w,i)=><div key={i} className="flex-1 flex flex-col items-center gap-1">
+              <span className="text-[9px] text-muted">{w}</span>
+              <div className="w-full bg-brand-500/60 rounded-t" style={{height:((w-76)/7*100)+"%"}}/></div>)}</div></Card></section>
+        <section><h3 className="text-sm text-muted mb-2">Salud declarada</h3>
+          <p className="text-sm">Lesiones: <span className="text-brand-400">{detail.injuries.join(", ")}</span></p>
+          <p className="text-xs text-muted mt-1.5">Reportó fatiga 2 de los últimos 7 días. Las cargas se
+            redujeron automáticamente esos días.</p></section></div>}</Sheet>
+
+    <Sheet open={!!assign} onClose={()=>setAssign(null)} title="Asignar rutina">
+      {assign&&<AssignForm c={assign} close={()=>setAssign(null)}/>}</Sheet>
+  </div>;
+}
+
+function AssignForm({c,close}){
+  const [name,setName]=useState("Plan "+c.name.split(" ")[0]);
+  const [days,setDays]=useState(4);
+  const [pick,setPick]=useState(["e1","e2","e6"]);
+  const [saved,setSaved]=useState(false);
+  if(saved) return <div className="text-center py-8">
+    <div className="w-14 h-14 rounded-full bg-ok/15 grid place-items-center mx-auto mb-4 text-ok"><Ico d={P.check} size={26}/></div>
+    <h3 className="font-bold text-lg mb-2">Rutina asignada</h3>
+    <p className="text-muted text-sm leading-relaxed mb-6">{c.name} verá <span className="text-txt">{name}</span> en
+      su pestaña Rutina la próxima vez que abra la app.</p>
+    <Btn className="w-full" onClick={close}>Listo</Btn></div>;
+  return <div className="space-y-5">
+    <div><label className="block text-sm text-muted mb-2">Nombre del plan</label>
+      <input value={name} onChange={e=>setName(e.target.value)} className="w-full"/></div>
+    <div><label className="block text-sm text-muted mb-2.5">Días por semana</label>
+      <div className="flex gap-2">{[2,3,4,5,6].map(n=>
+        <button key={n} onClick={()=>setDays(n)} className={"flex-1 py-2.5 rounded-lg text-sm font-semibold border "+
+          (days===n?"bg-brand-500 text-bg border-brand-500":"bg-surface2 text-muted border-line")}>{n}</button>)}</div></div>
+    <div><label className="block text-sm text-muted mb-2.5">Ejercicios <span className="text-txt">({pick.length})</span></label>
+      <div className="space-y-1.5 max-h-64 overflow-y-auto">{EX.map(e=>{
+        const on=pick.includes(e.id),risky=e.c.some(x=>c.injuries.includes(x));
+        return <button key={e.id} onClick={()=>setPick(p=>on?p.filter(x=>x!==e.id):[...p,e.id])}
+          className={"w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left "+
+            (on?"border-brand-500 bg-brand-500/10":"border-line bg-surface")}>
+          <span className={on?"text-brand-500":"text-muted"}><Ico d={P.dumb} size={15}/></span>
+          <div className="flex-1 min-w-0"><p className="text-sm font-semibold leading-tight truncate">{e.n}</p>
+            <p className="text-[11px] text-muted">{e.g}</p></div>
+          {risky&&<span className="text-[10px] text-warn">Riesgo</span>}</button>;})}</div></div>
+    <Btn className="w-full" disabled={!pick.length} onClick={()=>setSaved(true)}>
+      Asignar a {c.name.split(" ")[0]}</Btn></div>;
+}
+
+/* ---------------- Onboarding ---------------- */
+const INJ=[["rodilla","Rodilla"],["hombro","Hombro"],["espalda_baja","Espalda baja"],["muneca_codo","Muñeca / codo"],
+  ["cadera","Cadera"],["tobillo_pie","Tobillo / pie"],["articular_general","Molestia articular"],["ninguna","Ninguna"]];
+const LVL=[["principiante","Principiante","Menos de 6 meses entrenando"],
+  ["intermedio","Intermedio","6 meses a 2 años"],["avanzado","Avanzado","Más de 2 años constante"]];
+
+function Onboarding({st}){
+  const {setMe,setScreen}=st;
+  const [s,setS]=useState(0);
+  const [d,setD]=useState({name:"",gender:"",birth:"",weight:"",height:"",goal:"",level:"",inj:[],freq:3});
+  const set=p=>setD(x=>({...x,...p}));
+  const ok=[d.name.trim(),d.gender&&d.birth,d.weight&&d.height,d.goal,d.inj.length,d.level][s];
+  const toggle=id=>set({inj:id==="ninguna"?["ninguna"]:d.inj.includes(id)?d.inj.filter(i=>i!==id):[...d.inj.filter(i=>i!=="ninguna"),id]});
+
+  return <div className="min-h-screen flex flex-col">
+    <div className="flex items-center gap-3 mb-8">
+      <button onClick={()=>s>0?setS(s-1):setScreen("inicio")} className="text-muted"><Ico d={P.back} size={22}/></button>
+      <div className="flex-1 h-1 bg-surface2 rounded-full overflow-hidden">
+        <div className="h-full bg-brand-500 rounded-full" style={{width:((s+1)/6*100)+"%"}}/></div>
+      <span className="text-muted text-xs">{s+1}/6</span></div>
+
+    <div className="flex-1">
+      {s===0&&<Step t="¿Cómo te gusta que te digan?" sub="Así te llamaremos en la app.">
+        <input autoFocus value={d.name} onChange={e=>set({name:e.target.value})} placeholder="Tu nombre" className="w-full text-lg"/></Step>}
+      {s===1&&<Step t="Cuéntanos de ti" sub="Esto ajusta tus cargas iniciales.">
+        <label className="block text-sm text-muted mb-2">Género</label>
+        <div className="flex gap-2 mb-6">{["masculino","femenino","otro"].map(g=>
+          <Chip key={g} active={d.gender===g} onClick={()=>set({gender:g})}>{g[0].toUpperCase()+g.slice(1)}</Chip>)}</div>
+        <label className="block text-sm text-muted mb-2">Fecha de nacimiento</label>
+        <input type="date" value={d.birth} onChange={e=>set({birth:e.target.value})} className="w-full"/></Step>}
+      {s===2&&<Step t="Tus medidas" sub="Podrás actualizarlas cuando quieras.">
+        <div className="grid grid-cols-2 gap-4">
+          <div><label className="block text-sm text-muted mb-2">Peso (kg)</label>
+            <input type="number" inputMode="decimal" value={d.weight} onChange={e=>set({weight:e.target.value})} placeholder="75" className="w-full"/></div>
+          <div><label className="block text-sm text-muted mb-2">Altura (cm)</label>
+            <input type="number" inputMode="numeric" value={d.height} onChange={e=>set({height:e.target.value})} placeholder="175" className="w-full"/></div></div></Step>}
+      {s===3&&<Step t="¿Cuál es tu objetivo principal?" sub="Define la intensidad de tu plan.">
+        <div className="space-y-2.5">{Object.entries(GOALL).map(([id,l])=>
+          <button key={id} onClick={()=>set({goal:id})} className={"w-full text-left px-4 py-3.5 rounded-xl border "+
+            (d.goal===id?"border-brand-500 bg-brand-500/10":"border-line bg-surface")}>
+            <span className="font-semibold">{l}</span></button>)}</div></Step>}
+      {s===4&&<Step t="¿Tienes alguna lesión o molestia?" sub="Filtraremos ejercicios de riesgo y avisaremos a tu coach.">
+        <div className="flex flex-wrap gap-2">{INJ.map(([id,l])=>
+          <Chip key={id} active={d.inj.includes(id)} onClick={()=>toggle(id)}>{l}</Chip>)}</div>
+        <p className="text-[11px] text-muted mt-4 leading-relaxed">Esto no sustituye una valoración médica.
+          Si tienes dolor persistente, consulta a un fisioterapeuta o médico antes de entrenar esa zona.</p></Step>}
+      {s===5&&<Step t="Tu experiencia y disponibilidad" sub="Último paso.">
+        <div className="space-y-2.5 mb-7">{LVL.map(([id,l,h])=>
+          <button key={id} onClick={()=>set({level:id})} className={"w-full text-left px-4 py-3 rounded-xl border "+
+            (d.level===id?"border-brand-500 bg-brand-500/10":"border-line bg-surface")}>
+            <p className="font-semibold text-sm">{l}</p><p className="text-muted text-xs mt-0.5">{h}</p></button>)}</div>
+        <label className="block text-sm text-muted mb-3">Días por semana: <span className="text-txt font-semibold">{d.freq}</span></label>
+        <div className="flex gap-2">{[1,2,3,4,5,6,7].map(n=>
+          <button key={n} onClick={()=>set({freq:n})} className={"flex-1 py-2.5 rounded-lg text-sm font-semibold border "+
+            (d.freq===n?"bg-brand-500 text-bg border-brand-500":"bg-surface2 text-muted border-line")}>{n}</button>)}</div></Step>}
+    </div>
+
+    <Btn className="w-full mt-8" disabled={!ok} onClick={()=>{
+      if(s<5){setS(s+1);return;}
+      setMe(m=>({...m,name:d.name,weight:Number(d.weight),height:Number(d.height),
+        goal:d.goal,level:d.level,freq:d.freq,injuries:d.inj}));
+      setScreen("pending");}}>
+      {s===5?"Enviar solicitud a mi coach":"Continuar"}</Btn>
+  </div>;
+}
+const Step=({t,sub,children})=><div>
+  <h1 className="text-[26px] font-bold leading-tight mb-2">{t}</h1>
+  {sub&&<p className="text-muted text-sm mb-7">{sub}</p>}{children}</div>;
+
+/* ---------------- Espera ---------------- */
+function Waiting({st}){
+  return <div className="min-h-screen flex flex-col justify-center">
+    <div className="w-16 h-16 rounded-2xl bg-brand-500/15 grid place-items-center mb-6 text-brand-500">
+      <Ico d={P.cal} size={28}/></div>
+    <h1 className="text-[28px] font-bold leading-tight mb-3">Estamos revisando tu registro</h1>
+    <p className="text-muted leading-relaxed mb-8">Tu coach recibió la solicitud. En cuanto la apruebe,
+      tu rutina aparecerá aquí automáticamente y podrás empezar a entrenar.</p>
+    <Card className="mb-8"><ul className="space-y-3.5">
+      {[[1,"Perfil completado"],[1,"Solicitud enviada a tu coach"],[0,"Aprobación del coach"],[0,"Rutina asignada"]].map(([done,l])=>
+        <li key={l} className="flex items-center gap-3">
+          <span className={"w-5 h-5 rounded-full grid place-items-center "+(done?"bg-ok text-bg":"border border-line")}>
+            {done?<Ico d={P.check} size={12}/>:null}</span>
+          <span className={"text-sm "+(done?"":"text-muted")}>{l}</span></li>)}</ul></Card>
+    <Btn v="ghost" className="w-full" onClick={()=>st.setScreen("inicio")}>Volver a la app</Btn>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
